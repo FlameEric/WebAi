@@ -339,56 +339,92 @@ const examplePrompts = [
 // 登录处理
 const handleLogin = async () => {
   if (loginForm.password.length < 6) {
-    alert('密码至少需要6位字符')
-    return
+    alert("密码至少需要6位字符");
+    return;
   }
 
-  loginLoading.value = true
+  loginLoading.value = true;
 
-  // 模拟登录API调用
-  setTimeout(() => {
-    currentUser.value = {
-      username: loginForm.email.split('@')[0],
-      email: loginForm.email
+  try {
+    const res = await fetch("http://localhost:8000/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email: loginForm.email,
+        password: loginForm.password
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      currentUser.value = {
+        username: data.username,
+        email: loginForm.email
+      };
+      currentPage.value = "main";
+      loginForm.email = "";
+      loginForm.password = "";
+    } else {
+      alert(data.error || "登录失败");
     }
-    currentPage.value = 'main'
-    loginLoading.value = false
+  } catch (err) {
+    alert("登录请求失败：" + err.message);
+  } finally {
+    loginLoading.value = false;
+  }
+};
 
-    // 清空表单
-    loginForm.email = ''
-    loginForm.password = ''
-  }, 1500)
-}
 
 // 注册处理
 const handleRegister = async () => {
   if (registerForm.password !== registerForm.confirmPassword) {
-    alert('两次输入的密码不一致')
-    return
+    alert("两次输入的密码不一致");
+    return;
   }
 
   if (registerForm.password.length < 6) {
-    alert('密码至少需要6位字符')
-    return
+    alert("密码至少需要6位字符");
+    return;
   }
 
-  registerLoading.value = true
+  registerLoading.value = true;
 
-  // 模拟注册API调用
-  setTimeout(() => {
-    currentUser.value = {
-      username: registerForm.username,
-      email: registerForm.email
+  try {
+    const res = await fetch("http://localhost:8000/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        username: registerForm.username,
+        email: registerForm.email,
+        password: registerForm.password
+      })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      currentUser.value = {
+        username: registerForm.username,
+        email: registerForm.email
+      };
+      currentPage.value = "main";
+
+      Object.keys(registerForm).forEach(key => {
+        registerForm[key] = "";
+      });
+    } else {
+      alert(data.error || "注册失败");
     }
-    currentPage.value = 'main'
-    registerLoading.value = false
+  } catch (err) {
+    alert("注册请求失败：" + err.message);
+  } finally {
+    registerLoading.value = false;
+  }
+};
 
-    // 清空表单
-    Object.keys(registerForm).forEach(key => {
-      registerForm[key] = ''
-    })
-  }, 1500)
-}
 
 // 退出登录
 const handleLogout = () => {
