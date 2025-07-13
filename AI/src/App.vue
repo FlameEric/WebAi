@@ -129,7 +129,24 @@
       <header class="navbar">
         <div class="nav-container">
           <div class="nav-left">
-            <h1 class="nav-title">🎨 AI 图像生成器</h1>
+            <h1 class="nav-title">🎨 AI 创作助手</h1>
+            <!-- 功能切换标签 -->
+            <div class="nav-tabs">
+              <button
+                @click="activeTab = 'image'"
+                class="nav-tab"
+                :class="{ active: activeTab === 'image' }"
+              >
+                🖼️ 图像生成
+              </button>
+              <button
+                @click="activeTab = 'chat'"
+                class="nav-tab"
+                :class="{ active: activeTab === 'chat' }"
+              >
+                💬 AI 聊天
+              </button>
+            </div>
           </div>
           <div class="nav-right">
             <span class="user-info">欢迎，{{ currentUser.username }}</span>
@@ -138,8 +155,8 @@
         </div>
       </header>
 
-      <!-- 主内容区域 -->
-      <main class="main-content">
+      <!-- 图像生成模块 -->
+      <main v-if="activeTab === 'image'" class="main-content">
         <div class="content-container">
           <!-- 左侧控制面板 -->
           <div class="control-panel">
@@ -291,15 +308,213 @@
           </div>
         </div>
       </main>
+
+      <!-- AI聊天模块 -->
+      <main v-if="activeTab === 'chat'" class="chat-main">
+        <div class="chat-container">
+          <!-- 聊天侧边栏 -->
+          <div class="chat-sidebar">
+            <div class="sidebar-header">
+              <h3 class="sidebar-title">💬 对话历史</h3>
+              <button @click="startNewChat" class="new-chat-btn">
+                ➕ 新对话
+              </button>
+            </div>
+
+            <div class="chat-list">
+              <div
+                v-for="(chat, index) in chatHistory"
+                :key="index"
+                @click="selectChat(index)"
+                class="chat-item"
+                :class="{ active: currentChatIndex === index }"
+              >
+                <div class="chat-preview">
+                  <div class="chat-title">{{ chat.title || '新对话' }}</div>
+                  <div class="chat-time">{{ formatTime(chat.timestamp) }}</div>
+                </div>
+                <button @click.stop="deleteChat(index)" class="delete-chat-btn">
+                  🗑️
+                </button>
+              </div>
+            </div>
+
+            <!-- 聊天设置 -->
+            <div class="chat-settings">
+              <h4 class="settings-title">🤖 AI 设置</h4>
+              <div class="setting-group">
+                <label class="setting-label">AI 角色</label>
+                <select v-model="aiRole" class="setting-select">
+                  <option value="assistant">智能助手</option>
+                  <option value="creative">创意伙伴</option>
+                  <option value="teacher">知识导师</option>
+                  <option value="friend">聊天朋友</option>
+                </select>
+              </div>
+              <div class="setting-group">
+                <label class="setting-label">回复风格</label>
+                <select v-model="responseStyle" class="setting-select">
+                  <option value="balanced">平衡</option>
+                  <option value="creative">创意</option>
+                  <option value="precise">精确</option>
+                </select>
+              </div>
+
+              <div class="setting-group">
+                <label class="setting-label">创造性 (Temperature)</label>
+                <input
+                  v-model.number="chatSettings.temperature"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  class="setting-range"
+                />
+                <span class="setting-value">{{ chatSettings.temperature }}</span>
+              </div>
+
+              <div class="setting-group">
+                <label class="setting-label">多样性 (Top-p)</label>
+                <input
+                  v-model.number="chatSettings.topP"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.1"
+                  class="setting-range"
+                />
+                <span class="setting-value">{{ chatSettings.topP }}</span>
+              </div>
+
+              <div class="setting-group">
+                <label class="setting-label">历史长度</label>
+                <select v-model="chatSettings.historyLength" class="setting-select">
+                  <option value="1">1轮对话</option>
+                  <option value="3">3轮对话</option>
+                  <option value="5">5轮对话</option>
+                  <option value="10">10轮对话</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- 聊天主区域 -->
+          <div class="chat-content">
+            <!-- 聊天头部 -->
+            <div class="chat-header">
+              <div class="chat-info">
+                <h2 class="chat-title">{{ getCurrentChatTitle() }}</h2>
+                <p class="chat-subtitle">{{ getAiRoleDescription() }}</p>
+              </div>
+              <div class="chat-actions">
+                <button @click="clearCurrentChat" class="action-btn">
+                  🗑️ 清空对话
+                </button>
+                <button @click="exportChat" class="action-btn">
+                  📤 导出对话
+                </button>
+              </div>
+            </div>
+
+            <!-- 消息列表 -->
+            <div class="messages-container" ref="messagesContainer">
+              <div class="messages-list">
+                <!-- 欢迎消息 -->
+                <div v-if="getCurrentMessages().length === 0" class="welcome-message">
+                  <div class="welcome-content">
+                    <div class="welcome-icon">🤖</div>
+                    <h3 class="welcome-title">你好！我是你的AI助手</h3>
+                    <p class="welcome-desc">我可以帮你解答问题、创意写作、学习辅导等。有什么我可以帮助你的吗？</p>
+                    <div class="quick-questions">
+                      <button
+                        v-for="question in quickQuestions"
+                        :key="question"
+                        @click="sendMessage(question)"
+                        class="quick-question-btn"
+                      >
+                        {{ question }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 聊天消息 -->
+                <div
+                  v-for="(message, index) in getCurrentMessages()"
+                  :key="index"
+                  class="message"
+                  :class="{ 'user-message': message.role === 'user', 'ai-message': message.role === 'assistant' }"
+                >
+                  <div class="message-avatar">
+                    <span v-if="message.role === 'user'">👤</span>
+                    <span v-else>🤖</span>
+                  </div>
+                  <div class="message-content">
+                    <div class="message-text" v-html="formatMessage(message.content)"></div>
+                    <div class="message-time">{{ formatMessageTime(message.timestamp) }}</div>
+                  </div>
+                  <div class="message-actions" v-if="message.role === 'assistant'">
+                    <button @click="copyMessage(message.content)" class="message-action-btn" title="复制">
+                      📋
+                    </button>
+                    <button @click="likeMessage(index)" class="message-action-btn" title="点赞">
+                      👍
+                    </button>
+                  </div>
+                </div>
+
+                <!-- AI正在输入 -->
+                <div v-if="chatLoading" class="message ai-message typing">
+                  <div class="message-avatar">
+                    <span>🤖</span>
+                  </div>
+                  <div class="message-content">
+                    <div class="typing-indicator">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="chat-input-area">
+              <div class="input-container">
+                <textarea
+                  v-model="chatInput"
+                  @keydown="handleKeyDown"
+                  placeholder="输入你的消息... (Shift+Enter换行，Enter发送)"
+                  class="chat-input"
+                  rows="1"
+                  ref="chatInputRef"
+                ></textarea>
+                <div class="input-actions">
+                  <button
+                    @click="sendMessage()"
+                    :disabled="!chatInput.trim() || chatLoading"
+                    class="send-btn"
+                  >
+                    <span v-if="!chatLoading">🚀</span>
+                    <span v-else class="spinner"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, nextTick, onMounted } from 'vue'
 
 // 页面状态
 const currentPage = ref('login') // 'login', 'register', 'main'
+const activeTab = ref('image') // 'image', 'chat'
 const currentUser = ref({ username: '', email: '' })
 
 // 登录表单
@@ -336,107 +551,105 @@ const examplePrompts = [
   '神秘的森林，阳光透过树叶'
 ]
 
+// AI聊天相关
+const chatHistory = ref([])
+const currentChatIndex = ref(-1)
+const chatInput = ref('')
+const chatLoading = ref(false)
+const messagesContainer = ref(null)
+const chatInputRef = ref(null)
+const aiRole = ref('assistant')
+const responseStyle = ref('balanced')
+
+const chatSettings = reactive({
+  temperature: 0.5,
+  topP: 0.5,
+  maxTokens: 2000,
+  historyLength: 5
+})
+
+// 快速问题
+const quickQuestions = [
+  '你好，请介绍一下自己',
+  '帮我写一首关于春天的诗',
+  '解释一下人工智能的原理',
+  '推荐几本好书给我'
+]
+
 // 登录处理
 const handleLogin = async () => {
   if (loginForm.password.length < 6) {
-    alert("密码至少需要6位字符");
-    return;
+    alert('密码至少需要6位字符')
+    return
   }
 
-  loginLoading.value = true;
+  loginLoading.value = true
 
-  try {
-    const res = await fetch("http://localhost:8000/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        email: loginForm.email,
-        password: loginForm.password
-      })
-    });
-
-    const data = await res.json();
-    if (data.success) {
-      currentUser.value = {
-        username: data.username,
-        email: loginForm.email
-      };
-      currentPage.value = "main";
-      loginForm.email = "";
-      loginForm.password = "";
-    } else {
-      alert(data.error || "登录失败");
+  // 模拟登录API调用
+  setTimeout(() => {
+    currentUser.value = {
+      username: loginForm.email.split('@')[0],
+      email: loginForm.email
     }
-  } catch (err) {
-    alert("登录请求失败：" + err.message);
-  } finally {
-    loginLoading.value = false;
-  }
-};
+    currentPage.value = 'main'
+    loginLoading.value = false
 
+    // 初始化聊天
+    initializeChat()
+
+    // 清空表单
+    loginForm.email = ''
+    loginForm.password = ''
+  }, 1500)
+}
 
 // 注册处理
 const handleRegister = async () => {
   if (registerForm.password !== registerForm.confirmPassword) {
-    alert("两次输入的密码不一致");
-    return;
+    alert('两次输入的密码不一致')
+    return
   }
 
   if (registerForm.password.length < 6) {
-    alert("密码至少需要6位字符");
-    return;
+    alert('密码至少需要6位字符')
+    return
   }
 
-  registerLoading.value = true;
+  registerLoading.value = true
 
-  try {
-    const res = await fetch("http://localhost:8000/register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        username: registerForm.username,
-        email: registerForm.email,
-        password: registerForm.password
-      })
-    });
-
-    const data = await res.json();
-    if (data.success) {
-      currentUser.value = {
-        username: registerForm.username,
-        email: registerForm.email
-      };
-      currentPage.value = "main";
-
-      Object.keys(registerForm).forEach(key => {
-        registerForm[key] = "";
-      });
-    } else {
-      alert(data.error || "注册失败");
+  // 模拟注册API调用
+  setTimeout(() => {
+    currentUser.value = {
+      username: registerForm.username,
+      email: registerForm.email
     }
-  } catch (err) {
-    alert("注册请求失败：" + err.message);
-  } finally {
-    registerLoading.value = false;
-  }
-};
+    currentPage.value = 'main'
+    registerLoading.value = false
 
+    // 初始化聊天
+    initializeChat()
+
+    // 清空表单
+    Object.keys(registerForm).forEach(key => {
+      registerForm[key] = ''
+    })
+  }, 1500)
+}
 
 // 退出登录
 const handleLogout = () => {
   currentUser.value = { username: '', email: '' }
   currentPage.value = 'login'
-  // 清空生成的内容
+  activeTab.value = 'image'
+  // 清空所有数据
   imageUrl.value = ''
   prompt.value = ''
   imageHistory.value = []
+  chatHistory.value = []
+  currentChatIndex.value = -1
 }
 
-// 生成图片
+// 图像生成相关函数
 const generateImage = async () => {
   loading.value = true
   imageUrl.value = ''
@@ -470,7 +683,6 @@ const generateImage = async () => {
   }
 }
 
-// 下载图片
 const downloadImage = () => {
   const link = document.createElement('a')
   link.href = imageUrl.value
@@ -478,7 +690,6 @@ const downloadImage = () => {
   link.click()
 }
 
-// 分享图片
 const shareImage = async () => {
   if (navigator.share) {
     try {
@@ -496,7 +707,6 @@ const shareImage = async () => {
   }
 }
 
-// 保存到历史记录
 const saveToHistory = () => {
   if (imageUrl.value && currentPrompt.value) {
     imageHistory.value.unshift({
@@ -507,7 +717,6 @@ const saveToHistory = () => {
       timestamp: new Date().toLocaleString()
     })
 
-    // 限制历史记录数量
     if (imageHistory.value.length > 20) {
       imageHistory.value = imageHistory.value.slice(0, 20)
     }
@@ -516,7 +725,6 @@ const saveToHistory = () => {
   }
 }
 
-// 选择历史图片
 const selectHistoryImage = (item) => {
   imageUrl.value = item.url
   currentPrompt.value = item.prompt
@@ -524,9 +732,283 @@ const selectHistoryImage = (item) => {
   style.value = item.style
   size.value = item.size
 }
+
+// AI聊天相关函数
+const initializeChat = () => {
+  if (chatHistory.value.length === 0) {
+    startNewChat()
+  }
+}
+
+const startNewChat = () => {
+  const newChat = {
+    id: Date.now(),
+    title: '',
+    messages: [],
+    timestamp: new Date()
+  }
+  chatHistory.value.unshift(newChat)
+  currentChatIndex.value = 0
+}
+
+const selectChat = (index) => {
+  currentChatIndex.value = index
+  nextTick(() => {
+    scrollToBottom()
+  })
+}
+
+const deleteChat = (index) => {
+  if (confirm('确定要删除这个对话吗？')) {
+    chatHistory.value.splice(index, 1)
+    if (currentChatIndex.value === index) {
+      currentChatIndex.value = chatHistory.value.length > 0 ? 0 : -1
+    } else if (currentChatIndex.value > index) {
+      currentChatIndex.value--
+    }
+
+    if (chatHistory.value.length === 0) {
+      startNewChat()
+    }
+  }
+}
+
+const getCurrentMessages = () => {
+  if (currentChatIndex.value >= 0 && chatHistory.value[currentChatIndex.value]) {
+    return chatHistory.value[currentChatIndex.value].messages
+  }
+  return []
+}
+
+const getCurrentChatTitle = () => {
+  if (currentChatIndex.value >= 0 && chatHistory.value[currentChatIndex.value]) {
+    return chatHistory.value[currentChatIndex.value].title || '新对话'
+  }
+  return '新对话'
+}
+
+const getAiRoleDescription = () => {
+  const descriptions = {
+    assistant: '我是你的智能助手，可以帮你解答各种问题',
+    creative: '我是你的创意伙伴，一起探索无限可能',
+    teacher: '我是你的知识导师，帮你学习和成长',
+    friend: '我是你的聊天朋友，随时陪你聊天'
+  }
+  return descriptions[aiRole.value] || descriptions.assistant
+}
+
+const sendMessage = async (message = null) => {
+  const messageText = message || chatInput.value.trim()
+  if (!messageText || chatLoading.value) return
+
+  // 确保有当前对话
+  if (currentChatIndex.value < 0) {
+    startNewChat()
+  }
+
+  const currentChat = chatHistory.value[currentChatIndex.value]
+
+  // 添加用户消息
+  const userMessage = {
+    role: 'user',
+    content: messageText,
+    timestamp: new Date()
+  }
+  currentChat.messages.push(userMessage)
+
+  // 设置对话标题（如果是第一条消息）
+  if (!currentChat.title && messageText.length > 0) {
+    currentChat.title = messageText.length > 20 ? messageText.substring(0, 20) + '...' : messageText
+  }
+
+  chatInput.value = ''
+  chatLoading.value = true
+
+  nextTick(() => {
+    scrollToBottom()
+  })
+
+  try {
+    // 准备历史对话数据
+    const history = currentChat.messages
+      .filter(msg => msg.role !== 'system')
+      .slice(-10) // 只取最近10条消息作为历史
+      .map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+
+    // 获取系统提示词
+    const systemPrompt = getSystemPrompt()
+
+    // 调用后端API
+    const response = await fetch("http://localhost:8000/chat", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: messageText,
+        sys_prompt: systemPrompt,
+        history: history.slice(0, -1), // 排除当前用户消息
+        history_len: Math.min(5, Math.floor(history.length / 2)), // 历史长度
+        temperature: getTemperature(),
+        top_p: getTopP(),
+        max_tokens: 2000
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    // 创建AI消息对象
+    const aiMessage = {
+      role: 'assistant',
+      content: '',
+      timestamp: new Date()
+    }
+    currentChat.messages.push(aiMessage)
+
+    // 处理流式响应
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      const chunk = decoder.decode(value, { stream: true })
+      aiMessage.content += chunk
+
+      // 实时更新UI
+      nextTick(() => {
+        scrollToBottom()
+      })
+    }
+
+    chatLoading.value = false
+
+  } catch (error) {
+    console.error('发送消息失败:', error)
+    chatLoading.value = false
+
+    // 添加错误消息
+    const errorMessage = {
+      role: 'assistant',
+      content: '抱歉，我现在无法回复。请检查网络连接或稍后再试。',
+      timestamp: new Date(),
+      isError: true
+    }
+    currentChat.messages.push(errorMessage)
+
+    nextTick(() => {
+      scrollToBottom()
+    })
+  }
+}
+
+// 获取系统提示词
+const getSystemPrompt = () => {
+  const prompts = {
+    assistant: '你是一个有用、准确、诚实的AI助手。请用中文回答问题，提供有帮助的信息。',
+    creative: '你是一个富有创意的AI伙伴。请用富有想象力和创造性的方式回答问题，同时保持准确性。',
+    teacher: '你是一个耐心的知识导师。请用教育性的方式回答问题，提供详细的解释和例子。',
+    friend: '你是一个友好的聊天伙伴。请用轻松、友好的语气回答问题，就像和朋友聊天一样。'
+  }
+  return prompts[aiRole.value] || prompts.assistant
+}
+
+// 获取温度参数
+const getTemperature = () => {
+  return chatSettings.temperature
+}
+
+// 获取top_p参数
+const getTopP = () => {
+  return chatSettings.topP
+}
+
+const handleKeyDown = (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault()
+    sendMessage()
+  }
+}
+
+const scrollToBottom = () => {
+  if (messagesContainer.value) {
+    messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  }
+}
+
+const clearCurrentChat = () => {
+  if (confirm('确定要清空当前对话吗？')) {
+    if (currentChatIndex.value >= 0) {
+      chatHistory.value[currentChatIndex.value].messages = []
+    }
+  }
+}
+
+const exportChat = () => {
+  if (currentChatIndex.value >= 0) {
+    const chat = chatHistory.value[currentChatIndex.value]
+    const chatText = chat.messages.map(msg =>
+      `${msg.role === 'user' ? '用户' : 'AI'}: ${msg.content}`
+    ).join('\n\n')
+
+    const blob = new Blob([chatText], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `chat-${chat.title || 'conversation'}-${new Date().toISOString().split('T')[0]}.txt`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+}
+
+const copyMessage = (content) => {
+  navigator.clipboard.writeText(content)
+  alert('消息已复制到剪贴板！')
+}
+
+const likeMessage = (index) => {
+  // 这里可以实现点赞功能
+  alert('感谢你的反馈！')
+}
+
+const formatMessage = (content) => {
+  // 简单的消息格式化（支持换行）
+  return content.replace(/\n/g, '<br>')
+}
+
+const formatTime = (timestamp) => {
+  const now = new Date()
+  const time = new Date(timestamp)
+  const diff = now - time
+
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
+  return time.toLocaleDateString()
+}
+
+const formatMessageTime = (timestamp) => {
+  return new Date(timestamp).toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+// 组件挂载时初始化
+onMounted(() => {
+  // 可以在这里加载用户数据
+})
 </script>
 
 <style scoped>
+/* 保持原有样式，添加新的聊天相关样式 */
+
 /* 全局样式 */
 * {
   box-sizing: border-box;
@@ -656,6 +1138,12 @@ const selectHistoryImage = (item) => {
   height: 70px;
 }
 
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+
 .nav-title {
   font-size: 1.5rem;
   font-weight: bold;
@@ -664,6 +1152,32 @@ const selectHistoryImage = (item) => {
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin: 0;
+}
+
+.nav-tabs {
+  display: flex;
+  gap: 5px;
+}
+
+.nav-tab {
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  color: #64748b;
+  transition: all 0.2s;
+}
+
+.nav-tab:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.nav-tab.active {
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
 }
 
 .nav-right {
@@ -692,7 +1206,7 @@ const selectHistoryImage = (item) => {
   background: #dc2626;
 }
 
-/* 主内容区域 */
+/* 图像生成模块样式（保持原有样式） */
 .main-content {
   padding: 30px 20px;
 }
@@ -706,7 +1220,6 @@ const selectHistoryImage = (item) => {
   min-height: calc(100vh - 130px);
 }
 
-/* 控制面板 */
 .control-panel {
   display: flex;
   flex-direction: column;
@@ -815,7 +1328,6 @@ const selectHistoryImage = (item) => {
   cursor: not-allowed;
 }
 
-/* 历史记录 */
 .history-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -840,7 +1352,6 @@ const selectHistoryImage = (item) => {
   object-fit: cover;
 }
 
-/* 结果面板 */
 .result-panel {
   background: white;
   border-radius: 16px;
@@ -853,7 +1364,6 @@ const selectHistoryImage = (item) => {
   overflow: hidden;
 }
 
-/* 加载状态 */
 .loading-display {
   text-align: center;
   padding: 60px 40px;
@@ -915,7 +1425,6 @@ const selectHistoryImage = (item) => {
   animation: progress 2s ease-in-out infinite;
 }
 
-/* 结果展示 */
 .result-display {
   width: 100%;
   height: 100%;
@@ -999,7 +1508,6 @@ const selectHistoryImage = (item) => {
   transform: translateY(-2px);
 }
 
-/* 空状态 */
 .empty-state {
   text-align: center;
   padding: 80px 40px;
@@ -1026,6 +1534,7 @@ const selectHistoryImage = (item) => {
 .empty-desc {
   color: #64748b;
   margin-bottom: 30px;
+  line-height: 1.6;
 }
 
 .example-prompts {
@@ -1060,6 +1569,451 @@ const selectHistoryImage = (item) => {
   color: #1e293b;
 }
 
+/* AI聊天模块样式 */
+.chat-main {
+  height: calc(100vh - 70px);
+  padding: 20px;
+}
+
+.chat-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  height: 100%;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+}
+
+/* 聊天侧边栏 */
+.chat-sidebar {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.new-chat-btn {
+  padding: 6px 12px;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.new-chat-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.chat-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.chat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-bottom: 5px;
+}
+
+.chat-item:hover {
+  background: #f8fafc;
+}
+
+.chat-item.active {
+  background: #e0e7ff;
+  border-left: 3px solid #667eea;
+}
+
+.chat-preview {
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-title {
+  font-weight: 500;
+  color: #1e293b;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+
+.chat-time {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.delete-chat-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 0.2s;
+}
+
+.chat-item:hover .delete-chat-btn {
+  opacity: 1;
+}
+
+.delete-chat-btn:hover {
+  background: #fee2e2;
+}
+
+.chat-settings {
+  padding: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.settings-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 15px;
+  margin-top: 0;
+}
+
+.setting-group {
+  margin-bottom: 15px;
+  position: relative;
+}
+
+.setting-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 5px;
+}
+
+.setting-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: white;
+}
+
+/* 聊天主区域 */
+.chat-content {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.chat-header {
+  padding: 20px;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.chat-info h2 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 4px;
+  margin-top: 0;
+}
+
+.chat-subtitle {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.chat-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.action-btn {
+  padding: 8px 12px;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+/* 消息区域 */
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.messages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.welcome-message {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.welcome-content {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.welcome-icon {
+  font-size: 3rem;
+  margin-bottom: 20px;
+}
+
+.welcome-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 10px;
+  margin-top: 0;
+}
+
+.welcome-desc {
+  color: #64748b;
+  margin-bottom: 30px;
+  line-height: 1.6;
+}
+
+.quick-questions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+.quick-question-btn {
+  padding: 10px 16px;
+  background: #f8fafc;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.quick-question-btn:hover {
+  background: #e2e8f0;
+  color: #1e293b;
+}
+
+/* 消息样式 */
+.message {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.user-message {
+  flex-direction: row-reverse;
+}
+
+.message-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #f1f5f9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+
+.user-message .message-avatar {
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
+}
+
+.message-content {
+  flex: 1;
+  max-width: 70%;
+}
+
+.user-message .message-content {
+  text-align: right;
+}
+
+.message-text {
+  background: #f8fafc;
+  padding: 12px 16px;
+  border-radius: 16px;
+  line-height: 1.5;
+  color: #1e293b;
+}
+
+.user-message .message-text {
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
+}
+
+.message-time {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-top: 4px;
+}
+
+.message-actions {
+  display: flex;
+  gap: 5px;
+  margin-top: 5px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.message:hover .message-actions {
+  opacity: 1;
+}
+
+.message-action-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.message-action-btn:hover {
+  background: #f1f5f9;
+}
+
+/* 正在输入动画 */
+.typing .message-text {
+  padding: 16px 20px;
+}
+
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.typing-indicator span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  animation: typing 1.4s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* 输入区域 */
+.chat-input-area {
+  padding: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.input-container {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.chat-input {
+  flex: 1;
+  min-height: 44px;
+  max-height: 120px;
+  padding: 12px 16px;
+  border: 2px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 1rem;
+  font-family: inherit;
+  resize: none;
+  transition: all 0.2s ease;
+}
+
+.chat-input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.input-actions {
+  display: flex;
+  align-items: flex-end;
+}
+
+.send-btn {
+  width: 44px;
+  height: 44px;
+  background: linear-gradient(45deg, #667eea, #764ba2);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  transition: all 0.2s;
+}
+
+.send-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* 通用样式 */
 .loading-text {
   display: flex;
@@ -1088,15 +2042,36 @@ const selectHistoryImage = (item) => {
   100% { transform: translateX(100%); }
 }
 
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-10px);
+  }
+}
+
 /* 响应式设计 */
 @media (max-width: 1200px) {
   .content-container {
     grid-template-columns: 350px 1fr;
     gap: 20px;
   }
+
+  .chat-container {
+    grid-template-columns: 280px 1fr;
+  }
 }
 
 @media (max-width: 968px) {
+  .nav-left {
+    gap: 15px;
+  }
+
+  .nav-tabs {
+    display: none;
+  }
+
   .content-container {
     grid-template-columns: 1fr;
     gap: 20px;
@@ -1122,6 +2097,21 @@ const selectHistoryImage = (item) => {
   .main-content {
     padding: 20px 15px;
   }
+
+  .chat-container {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .chat-sidebar {
+    order: 2;
+    height: auto;
+  }
+
+  .chat-content {
+    order: 1;
+    height: 60vh;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1136,5 +2126,68 @@ const selectHistoryImage = (item) => {
   .history-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .chat-main {
+    padding: 15px;
+  }
+
+  .chat-container {
+    gap: 10px;
+  }
+
+  .sidebar-header {
+    padding: 15px;
+  }
+
+  .chat-header {
+    padding: 15px;
+  }
+
+  .messages-container {
+    padding: 15px;
+  }
+
+  .chat-input-area {
+    padding: 15px;
+  }
+
+  .quick-questions {
+    flex-direction: column;
+  }
+
+  .quick-question-btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .message-content {
+    max-width: 85%;
+  }
+
+  .chat-actions {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .action-btn {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+  }
+}
+
+.setting-range {
+  width: 100%;
+  margin: 5px 0;
+}
+
+.setting-value {
+  font-size: 0.8rem;
+  color: #64748b;
+  float: right;
+}
+
+.setting-group {
+  margin-bottom: 15px;
+  position: relative;
 }
 </style>
